@@ -38,12 +38,41 @@ class ArInfoCardWidget extends StatelessWidget {
             const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                card.imageUrl,
-                height: 120,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
+              child: card.imageUrl.startsWith('http')
+                  ? Image.network(
+                      card.imageUrl,
+                      height: 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (BuildContext context, Widget child, ImageChunkEvent? progress) {
+                        if (progress == null) return child;
+                        final double? percent =
+                            progress.expectedTotalBytes != null && progress.expectedTotalBytes != 0
+                                ? progress.cumulativeBytesLoaded / (progress.expectedTotalBytes ?? 1)
+                                : null;
+                        return SizedBox(
+                          height: 120,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: percent,
+                              color: primaryBlue,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => Image.asset(
+                        'assets/images/room_placeholder.png',
+                        height: 120,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : Image.asset(
+                      card.imageUrl,
+                      height: 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
             ),
             const SizedBox(height: 12),
             Text(card.content),

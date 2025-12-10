@@ -84,7 +84,7 @@ final ARInfoCard genericInfoCard = ARInfoCard(
   title: 'Punto de interés',
   content:
       'Ejemplo de panel AR. Aquí puedes mostrar datos curiosos o indicaciones para extenderlo a un campus universitario.',
-  imageUrl: 'https://via.placeholder.com/300x180',
+  imageUrl: 'assets/images/room_placeholder.png',
   features: const <String>[
     'Capacidad: 4 personas',
     'Horario: 24/7',
