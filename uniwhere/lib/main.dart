@@ -101,7 +101,7 @@ class MyApp extends StatelessWidget {
           ),
           
           // Estilo de tarjetas
-          cardTheme: CardTheme(
+          cardTheme: CardThemeData(
             elevation: AppConstants.cardElevation,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(

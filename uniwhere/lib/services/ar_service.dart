@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:vector_math/vector_math_64.dart';
 
 /// Servicio AR simplificado
@@ -257,6 +258,6 @@ class ARService {
 }
 
 // Funciones auxiliares para cálculos trigonométricos
-double sin(double radians) => radians.sin();
-double cos(double radians) => radians.cos();
-double acos(double value) => value.acos();
+double sin(double radians) => math.sin(radians);
+double cos(double radians) => math.cos(radians);
+double acos(double value) => math.acos(value);

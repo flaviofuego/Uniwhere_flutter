@@ -56,7 +56,7 @@ dependencies:
   path_provider: ^2.1.2
   
   # Gestión de permisos
-  permission_handler: ^10.4.5
+  permission_handler: ^11.3.1
   
   # Utilidades adicionales
   uuid: ^4.3.3

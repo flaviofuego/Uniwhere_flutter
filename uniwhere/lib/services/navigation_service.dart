@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:vector_math/vector_math_64.dart';
 import '../models/room_location.dart';
 import '../models/navigation_path.dart';
@@ -230,5 +231,5 @@ class NavigationService {
 
 /// Función auxiliar para atan2
 double atan2(double y, double x) {
-  return y.atan2(x);
+  return math.atan2(y, x);
 }
