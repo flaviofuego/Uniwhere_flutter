@@ -59,7 +59,9 @@ void main() {
       );
 
       final bearing = waypoint1.bearingTo(waypoint2);
-      expect(bearing, closeTo(0.0, 0.1)); // Pointing east (along latitude axis)
+      // Moving from (0,0) to (1,0) - along positive latitude axis
+      // atan2(0, 1) = 0 degrees (points in direction of positive latitude)
+      expect(bearing, closeTo(0.0, 0.1));
     });
   });
 
