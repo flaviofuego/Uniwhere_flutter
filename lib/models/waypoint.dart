@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 class Waypoint {
@@ -19,19 +20,19 @@ class Waypoint {
     this.icon = Icons.place,
   });
 
-  // Calculate distance to another waypoint (simple euclidean distance)
+  // Calculate euclidean distance to another waypoint in meters
   double distanceTo(Waypoint other) {
     final dx = latitude - other.latitude;
     final dy = longitude - other.longitude;
     final dz = altitude - other.altitude;
-    return (dx * dx + dy * dy + dz * dz);
+    return math.sqrt(dx * dx + dy * dy + dz * dz);
   }
 
-  // Calculate bearing angle to another waypoint
+  // Calculate bearing angle to another waypoint in degrees
   double bearingTo(Waypoint other) {
     final dx = other.latitude - latitude;
     final dy = other.longitude - longitude;
-    return (dy.atan2(dx) * 180 / 3.14159265359);
+    return math.atan2(dy, dx) * 180 / math.pi;
   }
 }
 

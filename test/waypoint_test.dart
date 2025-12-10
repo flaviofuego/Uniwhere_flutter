@@ -38,7 +38,7 @@ void main() {
       );
 
       final distance = waypoint1.distanceTo(waypoint2);
-      expect(distance, 25.0); // 3^2 + 4^2 = 25
+      expect(distance, 5.0); // sqrt(3^2 + 4^2) = 5
     });
 
     test('Bearing calculation should work correctly', () {
@@ -59,7 +59,7 @@ void main() {
       );
 
       final bearing = waypoint1.bearingTo(waypoint2);
-      expect(bearing, closeTo(0.0, 0.1)); // Pointing east
+      expect(bearing, closeTo(0.0, 0.1)); // Pointing east (along latitude axis)
     });
   });
 
