@@ -1,0 +1,29 @@
+name: uniwhere_ar_wayfinding
+description: AR Wayfinding application for indoor navigation
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  camera: ^0.10.5+5
+  permission_handler: ^11.0.1
+  sensors_plus: ^4.0.2
+  vector_math: ^2.1.4
+  flutter_compass: ^0.8.0
+  geolocator: ^10.1.0
+  ar_flutter_plugin: ^0.7.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
