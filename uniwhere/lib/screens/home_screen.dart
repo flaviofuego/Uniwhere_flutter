@@ -69,6 +69,18 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         return;
       }
+      
+      if (!granted['location']!) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Se requiere permiso de ubicación para navegación'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
     }
     
     if (mounted) {

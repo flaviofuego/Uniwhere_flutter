@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
+import 'package:camera/camera.dart';
 import '../models/room_location.dart';
 import '../services/ar_service.dart';
 import '../services/navigation_service.dart';
@@ -31,6 +32,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
   bool _debugMode = false;
   Timer? _updateTimer;
   
+  // Cámara
+  CameraController? _cameraController;
+  bool _isCameraInitialized = false;
+  
   // Ubicaciones disponibles
   List<RoomLocation> _locations = [];
   RoomLocation? _selectedDestination;
@@ -51,8 +56,39 @@ class _NavigationScreenState extends State<NavigationScreen> {
     _initialize();
   }
 
+  Future<void> _initializeCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
+      
+      // Usar cámara trasera
+      final camera = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+      
+      _cameraController = CameraController(
+        camera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+      
+      await _cameraController!.initialize();
+      
+      if (mounted) {
+        setState(() => _isCameraInitialized = true);
+      }
+    } catch (e) {
+      debugPrint('Error al inicializar cámara: $e');
+      // Continuar sin cámara - mostrará fondo gradiente
+    }
+  }
+
   Future<void> _initialize() async {
     try {
+      // Inicializar cámara
+      await _initializeCamera();
+      
       // Inicializar AR
       await _arService.initialize();
       await _arService.startTracking();
@@ -172,10 +208,54 @@ class _NavigationScreenState extends State<NavigationScreen> {
   @override
   void dispose() {
     _updateTimer?.cancel();
+    _cameraController?.dispose();
     _arService.stopSimulation();
     _arService.stopTracking();
     _navigationService.stopNavigation();
     super.dispose();
+  }
+
+  /// Widget para mostrar la vista de cámara o un fondo de respaldo
+  Widget _buildCameraBackground() {
+    if (_isCameraInitialized && _cameraController != null) {
+      return SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _cameraController!.value.previewSize?.height ?? 100,
+            height: _cameraController!.value.previewSize?.width ?? 100,
+            child: CameraPreview(_cameraController!),
+          ),
+        ),
+      );
+    }
+    
+    // Fondo de respaldo si la cámara no está disponible
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.grey[800]!,
+            Colors.grey[900]!,
+          ],
+        ),
+      ),
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.camera_alt_outlined, size: 64, color: Colors.white30),
+            SizedBox(height: 16),
+            Text(
+              'Cámara no disponible',
+              style: TextStyle(color: Colors.white30),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -191,19 +271,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Fondo simulado de cámara AR
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.grey[800]!,
-                  Colors.grey[900]!,
-                ],
-              ),
-            ),
-          ),
+          // Vista de cámara real o fondo de respaldo
+          _buildCameraBackground(),
           
           // Indicador de tracking
           Positioned(

@@ -1,7 +1,7 @@
 import 'package:permission_handler/permission_handler.dart';
 
 /// Servicio para gestión de permisos de la aplicación
-/// Maneja permisos de cámara requeridos para AR
+/// Maneja permisos de cámara y ubicación requeridos para AR y navegación
 class PermissionsService {
   /// Solicita permiso de cámara
   Future<bool> requestCameraPermission() async {
@@ -12,6 +12,18 @@ class PermissionsService {
   /// Verifica si el permiso de cámara está otorgado
   Future<bool> hasCameraPermission() async {
     final status = await Permission.camera.status;
+    return status.isGranted;
+  }
+
+  /// Solicita permiso de ubicación
+  Future<bool> requestLocationPermission() async {
+    final status = await Permission.location.request();
+    return status.isGranted;
+  }
+
+  /// Verifica si el permiso de ubicación está otorgado
+  Future<bool> hasLocationPermission() async {
+    final status = await Permission.location.status;
     return status.isGranted;
   }
 
@@ -30,10 +42,12 @@ class PermissionsService {
   /// Solicita todos los permisos necesarios
   Future<Map<String, bool>> requestAllPermissions() async {
     final camera = await requestCameraPermission();
+    final location = await requestLocationPermission();
     final storage = await requestStoragePermission();
     
     return {
       'camera': camera,
+      'location': location,
       'storage': storage,
     };
   }
@@ -41,13 +55,14 @@ class PermissionsService {
   /// Verifica si todos los permisos necesarios están otorgados
   Future<bool> hasAllPermissions() async {
     final camera = await hasCameraPermission();
-    final storage = await hasStoragePermission();
+    final location = await hasLocationPermission();
+    // Storage es opcional
     
-    return camera && storage;
+    return camera && location;
   }
 
   /// Abre la configuración de la aplicación
-  Future<void> openAppSettings() async {
+  Future<void> openSettings() async {
     await openAppSettings();
   }
 
@@ -55,6 +70,7 @@ class PermissionsService {
   Future<Map<String, PermissionStatus>> getPermissionsStatus() async {
     return {
       'camera': await Permission.camera.status,
+      'location': await Permission.location.status,
       'storage': await Permission.storage.status,
     };
   }

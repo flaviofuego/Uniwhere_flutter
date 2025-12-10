@@ -12,14 +12,10 @@ class StorageService {
   Box? _settingsBox;
 
   /// Inicializa Hive y abre las boxes necesarias
+  /// NOTA: Hive.initFlutter() y registerAdapter() deben llamarse en main.dart
   Future<void> initialize() async {
     try {
-      await Hive.initFlutter();
-      
-      // Registrar adaptador de RoomLocation (se genera con build_runner)
-      // Hive.registerAdapter(RoomLocationAdapter());
-      
-      // Abrir boxes
+      // Abrir boxes (el adaptador ya debe estar registrado en main.dart)
       _locationsBox = await Hive.openBox<RoomLocation>(AppConstants.locationsBoxKey);
       _imagesBox = await Hive.openBox<String>(AppConstants.imagesBoxKey);
       _settingsBox = await Hive.openBox(AppConstants.settingsBoxKey);
@@ -29,11 +25,22 @@ class StorageService {
         await loadSampleData();
       }
     } catch (e) {
-      // Si falla el adaptador (porque no se generó con build_runner),
-      // usar box sin tipo
-      _locationsBox = await Hive.openBox<RoomLocation>(AppConstants.locationsBoxKey);
-      _imagesBox = await Hive.openBox<String>(AppConstants.imagesBoxKey);
-      _settingsBox = await Hive.openBox(AppConstants.settingsBoxKey);
+      // Si hay error, intentar borrar datos corruptos y reiniciar
+      try {
+        await Hive.deleteBoxFromDisk(AppConstants.locationsBoxKey);
+        await Hive.deleteBoxFromDisk(AppConstants.imagesBoxKey);
+        await Hive.deleteBoxFromDisk(AppConstants.settingsBoxKey);
+        
+        // Reintentar abrir las boxes
+        _locationsBox = await Hive.openBox<RoomLocation>(AppConstants.locationsBoxKey);
+        _imagesBox = await Hive.openBox<String>(AppConstants.imagesBoxKey);
+        _settingsBox = await Hive.openBox(AppConstants.settingsBoxKey);
+        
+        await loadSampleData();
+      } catch (e2) {
+        // Fallback final
+        rethrow;
+      }
     }
   }
 

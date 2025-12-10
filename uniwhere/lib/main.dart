@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'models/room_location.dart';
 import 'services/ar_service.dart';
 import 'services/navigation_service.dart';
 import 'services/storage_service.dart';
@@ -20,6 +22,17 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+  
+  // Inicializar Hive y registrar adaptadores ANTES de cualquier uso
+  await Hive.initFlutter();
+  
+  // Registrar adaptador siempre (verificar con debug)
+  if (!Hive.isAdapterRegistered(0)) {
+    Hive.registerAdapter(RoomLocationAdapter());
+    debugPrint('✅ RoomLocationAdapter registrado correctamente');
+  } else {
+    debugPrint('ℹ️ RoomLocationAdapter ya estaba registrado');
+  }
   
   // Inicializar servicios
   final storageService = StorageService();

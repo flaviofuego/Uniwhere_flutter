@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
+import 'package:camera/camera.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../models/room_location.dart';
 import '../models/sample_data.dart';
 import '../services/ar_service.dart';
@@ -28,6 +30,10 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   bool _debugMode = false;
   List<RoomLocation> _markedLocations = [];
   
+  // Cámara
+  CameraController? _cameraController;
+  bool _isCameraInitialized = false;
+  
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
@@ -40,8 +46,39 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     _initialize();
   }
 
+  Future<void> _initializeCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
+      
+      // Usar cámara trasera
+      final camera = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+      
+      _cameraController = CameraController(
+        camera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+      
+      await _cameraController!.initialize();
+      
+      if (mounted) {
+        setState(() => _isCameraInitialized = true);
+      }
+    } catch (e) {
+      debugPrint('Error al inicializar cámara: $e');
+      // Continuar sin cámara - mostrará fondo gradiente
+    }
+  }
+
   Future<void> _initialize() async {
     try {
+      // Inicializar cámara primero
+      await _initializeCamera();
+      
       // Inicializar servicios
       await _arService.initialize();
       await _arService.startTracking();
@@ -83,9 +120,39 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
 
   @override
   void dispose() {
+    _cameraController?.dispose();
     _arService.stopSimulation();
     _arService.stopTracking();
     super.dispose();
+  }
+
+  Widget _buildCameraBackground() {
+    if (_isCameraInitialized && _cameraController != null) {
+      return SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _cameraController!.value.previewSize?.height ?? 100,
+            height: _cameraController!.value.previewSize?.width ?? 100,
+            child: CameraPreview(_cameraController!),
+          ),
+        ),
+      );
+    }
+    
+    // Fallback: gradiente si la cámara no está disponible
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.blue[800]!,
+            Colors.blue[900]!,
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -101,19 +168,8 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Fondo simulado de cámara AR
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.blue[800]!,
-                  Colors.blue[900]!,
-                ],
-              ),
-            ),
-          ),
+          // Fondo de cámara real o gradiente de respaldo
+          _buildCameraBackground(),
           
           // Retícula de guía
           CustomPaint(
@@ -407,6 +463,9 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     String? imagePath,
   ) async {
     try {
+      debugPrint('🔵 Iniciando guardado de ubicación: $name');
+      debugPrint('🔵 Adapter registrado: ${Hive.isAdapterRegistered(0)}');
+      
       // Crear ubicación con posición actual del AR
       final location = RoomLocation(
         id: SampleData.generateId(),
@@ -417,12 +476,16 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         posZ: _arService.currentPosition.z,
         category: category,
         iconPath: SampleData.getCategoryIcons()[category]!,
-        tags: [],
+        tags: <String>[],  // Lista vacía explícitamente tipada
         imageReference: imagePath,
       );
       
+      debugPrint('🔵 RoomLocation creado: ${location.id}');
+      
       // Guardar en storage
       await _storageService.saveLocation(location);
+      
+      debugPrint('✅ Ubicación guardada exitosamente');
       
       // Si hay imagen, registrar en VPS
       if (imagePath != null) {
