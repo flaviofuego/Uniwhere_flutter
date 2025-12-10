@@ -53,7 +53,7 @@ class _HouseMapPainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(8, 8, size.width - 16, size.height - 16), border);
 
     // Escalamos las posiciones para que entren en el canvas.
-    const double scale = 20; // 1 metro = 20px aproximado.
+    const double scale = mapScalePixelsPerMeter; // 1 metro = 20px aproximado.
     final Offset origin = Offset(size.width / 2, size.height / 2);
 
     // Ruta.

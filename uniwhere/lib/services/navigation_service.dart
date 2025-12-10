@@ -118,7 +118,7 @@ class NavigationService extends ChangeNotifier {
   NavigationPath _buildPath(Vector3 start, Vector3 end) {
     // TODO: reemplazar por A* sobre plano importado del campus cuando se tenga el mapa real.
     final double distance = (end - start).length;
-    final int estimatedTime = max(1, (distance / 1.2).round()); // 1.2 m/s caminando.
+    final int estimatedTime = max(1, (distance / walkingSpeedMps).round()); // 1.2 m/s caminando.
     return NavigationPath(
       waypoints: <Vector3>[start, end],
       totalDistance: distance,

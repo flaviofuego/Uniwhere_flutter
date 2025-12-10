@@ -8,6 +8,12 @@ import '../models/room_location.dart';
 const Color primaryBlue = Color(0xFF2196F3);
 const Color darkGrey = Color(0xFF2C2C2C);
 
+/// Velocidad promedio de caminata usada para estimar tiempo (m/s).
+const double walkingSpeedMps = 1.2;
+
+/// Escala para convertir metros a píxeles en el mapa 2D esquemático.
+const double mapScalePixelsPerMeter = 20;
+
 /// Límite máximo de ubicaciones permitidas en la demo.
 const int maxLocations = 20;
 
