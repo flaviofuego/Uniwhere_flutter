@@ -24,6 +24,17 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(":app")
 }
+subprojects {
+    if (project.name == "arcore_flutter_plugin") {
+        afterEvaluate {
+            pluginManager.withPlugin("com.android.library") {
+                extensions.configure<com.android.build.gradle.LibraryExtension> {
+                    namespace = "com.github.giandifra.arcore_flutter_plugin"
+                }
+            }
+        }
+    }
+}
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

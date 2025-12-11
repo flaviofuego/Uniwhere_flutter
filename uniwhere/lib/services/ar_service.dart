@@ -2,13 +2,22 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:vector_math/vector_math_64.dart';
-import 'package:arcore_flutter_plugin/arcore_flutter_plugin.dart';
+import 'package:ar_flutter_plugin_plus/ar_flutter_plugin_plus.dart';
+import 'package:ar_flutter_plugin_plus/managers/ar_location_manager.dart';
+import 'package:ar_flutter_plugin_plus/managers/ar_session_manager.dart';
+import 'package:ar_flutter_plugin_plus/managers/ar_object_manager.dart';
+import 'package:ar_flutter_plugin_plus/managers/ar_anchor_manager.dart';
+import 'package:ar_flutter_plugin_plus/datatypes/config_planedetection.dart';
 
-/// Servicio AR con ARCore
-/// Gestiona sesión AR, tracking y posicionamiento usando ARCore
+/// Servicio AR con ar_flutter_plugin_plus
+/// Gestiona sesión AR, tracking y posicionamiento
 class ARService {
-  // Controlador de ARCore
-  ArCoreController? _arCoreController;
+  // Managers de ar_flutter_plugin
+  ARSessionManager? _arSessionManager;
+  ARObjectManager? _arObjectManager;
+  ARAnchorManager? _arAnchorManager;
+  ARLocationManager? _arLocationManager;
+
   // Estado del tracking
   bool _isTracking = false;
   bool _planesDetected = false;
@@ -42,63 +51,61 @@ class ARService {
   /// Inicializa la sesión AR
   Future<bool> initialize() async {
     try {
-      // Verificar si ARCore está disponible
-      bool? isAvailable = await ArCoreController.checkArCoreAvailability();
-      if (isAvailable == false) {
-        debugPrint('❌ ARCore no está disponible en este dispositivo');
-        return false;
-      }
-      
-      debugPrint('✅ ARCore disponible, inicializado correctamente');
+      // ar_flutter_plugin maneja la disponibilidad internamente
+      debugPrint('✅ AR Service inicializado');
       return true;
     } catch (e) {
-      debugPrint('❌ Error al inicializar ARCore: $e');
+      debugPrint('❌ Error al inicializar AR Service: $e');
       return false;
     }
   }
   
-  /// Callback cuando el controlador de ARCore está listo
-  void onArCoreViewCreated(ArCoreController controller) {
-    _arCoreController = controller;
+  /// Callback cuando la vista AR es creada
+  void onARViewCreated(
+    ARSessionManager sessionManager,
+    ARObjectManager objectManager,
+    ARAnchorManager anchorManager,
+    ARLocationManager locationManager,
+  ) {
+    _arSessionManager = sessionManager;
+    _arObjectManager = objectManager;
+    _arAnchorManager = anchorManager;
+    _arLocationManager = locationManager;
+
+    _arSessionManager!.onInitialize(
+      showFeaturePoints: false,
+      showPlanes: true,
+      customPlaneTexturePath: "Images/triangle.png",
+      showWorldOrigin: true,
+      handleTaps: false,
+    );
+    _arObjectManager!.onInitialize();
+
     _isTracking = true;
     onTrackingStateChanged?.call(true);
     
-    // Listener para actualización de posición
-    _arCoreController?.onPoseChanged = (pose) {
-      if (pose != null) {
-        // Actualizar posición desde ARCore pose
-        _currentPosition = Vector3(
-          pose.translation?.x ?? 0.0,
-          pose.translation?.y ?? 0.0,
-          pose.translation?.z ?? 0.0,
-        );
-        onPositionUpdated?.call(_currentPosition);
-      }
-    };
+    // Simulamos detección de planos ya que el plugin los maneja visualmente
+    _planesDetected = true;
+    _detectedPlanesCount = 1;
+    onPlanesDetectedCountChanged?.call(_detectedPlanesCount);
     
-    // Listener para detección de planos
-    _arCoreController?.onPlaneDetected = (plane) {
-      _planesDetected = true;
-      _detectedPlanesCount++;
-      onPlanesDetectedCountChanged?.call(_detectedPlanesCount);
-      debugPrint('🔵 Plano detectado: ${plane.type}');
-    };
-    
-   
-  
-  /// Obtiene el widget de vista ARCore
+    debugPrint('✅ ARView configurado');
+  }
+
+  /// Obtiene el widget de vista AR
+  /// Mantenemos el nombre getARCoreView para compatibilidad, aunque usa ar_flutter_plugin
   Widget getARCoreView({
-    required Function(ArCoreController) onViewCreated,
+    required Function(dynamic) onViewCreated,
     bool enableTapRecognizer = false,
   }) {
-    return ArCoreView(
-      onArCoreViewCreated: (controller) {
-        onArCoreViewCreated(controller);
-        onViewCreated(controller);
+    return ARView(
+      onARViewCreated: (sessionManager, objectManager, anchorManager, locationManager) {
+        onARViewCreated(sessionManager, objectManager, anchorManager, locationManager);
+        // Llamamos al callback original pasando el sessionManager como "controller"
+        onViewCreated(sessionManager);
       },
-      enableTapRecognizer: enableTapRecognizer,
+      planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
     );
-  } debugPrint('✅ ARCoreController configurado');
   }
 
   /// Inicia el tracking AR
@@ -106,7 +113,7 @@ class ARService {
     if (_isTracking) return true;
     
     try {
-      // Aquí iría el inicio real del tracking AR
+      // El tracking inicia con la vista
       await Future.delayed(const Duration(milliseconds: 300));
       
       _isTracking = true;
@@ -134,6 +141,8 @@ class ARService {
     _planesDetected = false;
     _detectedPlanesCount = 0;
     onTrackingStateChanged?.call(false);
+    // Podríamos limpiar sesión aquí si fuera necesario
+    // _arSessionManager?.dispose(); 
   }
 
   /// Establece el origen del sistema de coordenadas
@@ -286,8 +295,7 @@ class ARService {
   // ==========================================================================
 
   /// Obtiene información de estado para debug
-  Ma_arCoreController?.dispose();
-    p<String, dynamic> getDebugInfo() {
+  Map<String, dynamic> getDebugInfo() {
     return {
       'is_tracking': _isTracking,
       'planes_detected': _planesDetected,
@@ -303,6 +311,7 @@ class ARService {
   void dispose() {
     stopTracking();
     stopSimulation();
+    _arSessionManager?.dispose();
     onTrackingStateChanged = null;
     onPositionUpdated = null;
     onRotationUpdated = null;

@@ -269,14 +269,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
-            end: Alignment.topCenter,
-          colors: [
-            Colors.grey[800]!,
-            Colors.grey[900]!,
-          ],
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.grey[800]!,
+              Colors.grey[900]!,
+            ],
+          ),
         ),
-      ),
-      child: const Center(
+        child: const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -291,6 +291,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       ),
     );
   }
+}
 
   @override
   Widget build(BuildContext context) {
