@@ -86,11 +86,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   Future<void> _initialize() async {
     try {
-      // Inicializar cámara
-      await _initializeCamera();
+      // Inicializar AR primero
+      bool arInitialized = await _arService.initialize();
+      if (!arInitialized) {
+        // Si ARCore no está disponible, usar simulación con cámara
+        debugPrint('⚠️ ARCore no disponible, usando modo simulación con cámara');
+        await _initializeCamera();
+      }
       
-      // Inicializar AR
-      await _arService.initialize();
       await _arService.startTracking();
       
       // Cargar ubicaciones
@@ -104,8 +107,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
         _arService.setOrigin(Vector3.zero());
       }
       
-      // Iniciar simulación de movimiento para testing
-      _arService.startSimulation(startPosition: Vector3.zero());
+      // Iniciar simulación de movimiento para testing (solo si no hay ARCore)
+      if (!arInitialized) {
+        _arService.startSimulation(startPosition: Vector3.zero());
+      }
       
       // Si hay destino preseleccionado, iniciar navegación
       if (_selectedDestination != null) {
@@ -150,9 +155,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
   }
 
   void _startNavigation(RoomLocation destination) async {
+    // Establecer posición inicial alejada del destino para la demo
+    // En producción, esto vendría del tracking AR real
+    Vector3 startPos = _arService.currentPosition;
+    
+    // Si estamos muy cerca del destino, simular que empezamos desde lejos
+    double distToDestination = startPos.distanceTo(destination.position);
+    if (distToDestination < 3.0) {
+      // Empezar desde 10 metros atrás en X y Z
+      startPos = Vector3(
+        destination.position.x - 10.0,
+        destination.position.y,
+        destination.position.z - 10.0,
+      );
+      _arService.setOrigin(Vector3.zero());
+      _arService.updatePosition(startPos);
+    }
+    
     final success = await _navigationService.startNavigation(
       destination,
-      startPosition: _arService.currentPosition,
+      startPosition: startPos,
     );
     
     if (success) {
@@ -215,27 +237,39 @@ class _NavigationScreenState extends State<NavigationScreen> {
     super.dispose();
   }
 
-  /// Widget para mostrar la vista de cámara o un fondo de respaldo
+  /// Widget para mostrar la vista AR, cámara o un fondo de respaldo
   Widget _buildCameraBackground() {
-    if (_isCameraInitialized && _cameraController != null) {
-      return SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: _cameraController!.value.previewSize?.height ?? 100,
-            height: _cameraController!.value.previewSize?.width ?? 100,
-            child: CameraPreview(_cameraController!),
-          ),
-        ),
+    // Intentar usar ARCore si está disponible
+    try {
+      return _arService.getARCoreView(
+        onViewCreated: (controller) {
+          debugPrint('✅ Vista ARCore creada');
+        },
+        enableTapRecognizer: false,
       );
-    }
-    
-    // Fondo de respaldo si la cámara no está disponible
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+    } catch (e) {
+      debugPrint('⚠️ ARCore no disponible, usando cámara: $e');
+      
+      // Fallback a cámara normal si ARCore falla
+      if (_isCameraInitialized && _cameraController != null) {
+        return SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: _cameraController!.value.previewSize?.height ?? 100,
+              height: _cameraController!.value.previewSize?.width ?? 100,
+              child: CameraPreview(_cameraController!),
+            ),
+          ),
+        );
+      }
+      
+      // Fondo de respaldo si ni ARCore ni cámara están disponibles
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.topCenter,
           colors: [
             Colors.grey[800]!,
             Colors.grey[900]!,

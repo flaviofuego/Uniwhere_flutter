@@ -13,6 +13,7 @@ class NavigationService {
   NavigationPath? _currentPath;
   Vector3 _currentPosition = Vector3.zero();
   bool _isNavigating = false;
+  bool _justStarted = false; // Evitar detectar llegada inmediata
   
   // Callbacks para notificar cambios
   Function(NavigationPath)? onPathCalculated;
@@ -40,6 +41,7 @@ class NavigationService {
     }
     
     _isNavigating = true;
+    _justStarted = true; // Evitar detectar llegada en el primer frame
     
     // Notificar que la ruta fue calculada
     onPathCalculated?.call(_currentPath!);
@@ -50,6 +52,7 @@ class NavigationService {
   /// Detiene la navegación actual
   void stopNavigation() {
     _isNavigating = false;
+    _justStarted = false;
     _destination = null;
     _currentPath = null;
   }
@@ -67,6 +70,15 @@ class NavigationService {
     // Verificar si llegó al destino
     double distanceToDestination = _currentPosition.distanceTo(_destination!.position);
     onDistanceChanged?.call(distanceToDestination);
+    
+    // Evitar detectar llegada inmediata al iniciar
+    // Solo detectar llegada si ya nos hemos movido un poco o pasaron frames
+    if (_justStarted) {
+      if (distanceToDestination > AppConstants.destinationThreshold * 2) {
+        _justStarted = false; // Ya nos alejamos, ahora sí podemos detectar llegada
+      }
+      return false; // No detectar llegada todavía
+    }
     
     if (distanceToDestination < AppConstants.destinationThreshold) {
       onDestinationReached?.call();

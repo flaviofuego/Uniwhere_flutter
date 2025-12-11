@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/material.dart';
 import 'package:vector_math/vector_math_64.dart';
+import 'package:arcore_flutter_plugin/arcore_flutter_plugin.dart';
 
-/// Servicio AR simplificado
-/// Gestiona sesión AR, tracking y posicionamiento
-/// NOTA: Esta es una versión simulada para demostración
-/// En producción usaría ar_flutter_plugin o arcore_flutter_plugin
+/// Servicio AR con ARCore
+/// Gestiona sesión AR, tracking y posicionamiento usando ARCore
 class ARService {
+  // Controlador de ARCore
+  ArCoreController? _arCoreController;
   // Estado del tracking
   bool _isTracking = false;
   bool _planesDetected = false;
@@ -40,13 +42,63 @@ class ARService {
   /// Inicializa la sesión AR
   Future<bool> initialize() async {
     try {
-      // Aquí iría la inicialización real de ARCore/ARKit
-      // Por ahora simulamos éxito
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Verificar si ARCore está disponible
+      bool? isAvailable = await ArCoreController.checkArCoreAvailability();
+      if (isAvailable == false) {
+        debugPrint('❌ ARCore no está disponible en este dispositivo');
+        return false;
+      }
+      
+      debugPrint('✅ ARCore disponible, inicializado correctamente');
       return true;
     } catch (e) {
+      debugPrint('❌ Error al inicializar ARCore: $e');
       return false;
     }
+  }
+  
+  /// Callback cuando el controlador de ARCore está listo
+  void onArCoreViewCreated(ArCoreController controller) {
+    _arCoreController = controller;
+    _isTracking = true;
+    onTrackingStateChanged?.call(true);
+    
+    // Listener para actualización de posición
+    _arCoreController?.onPoseChanged = (pose) {
+      if (pose != null) {
+        // Actualizar posición desde ARCore pose
+        _currentPosition = Vector3(
+          pose.translation?.x ?? 0.0,
+          pose.translation?.y ?? 0.0,
+          pose.translation?.z ?? 0.0,
+        );
+        onPositionUpdated?.call(_currentPosition);
+      }
+    };
+    
+    // Listener para detección de planos
+    _arCoreController?.onPlaneDetected = (plane) {
+      _planesDetected = true;
+      _detectedPlanesCount++;
+      onPlanesDetectedCountChanged?.call(_detectedPlanesCount);
+      debugPrint('🔵 Plano detectado: ${plane.type}');
+    };
+    
+   
+  
+  /// Obtiene el widget de vista ARCore
+  Widget getARCoreView({
+    required Function(ArCoreController) onViewCreated,
+    bool enableTapRecognizer = false,
+  }) {
+    return ArCoreView(
+      onArCoreViewCreated: (controller) {
+        onArCoreViewCreated(controller);
+        onViewCreated(controller);
+      },
+      enableTapRecognizer: enableTapRecognizer,
+    );
+  } debugPrint('✅ ARCoreController configurado');
   }
 
   /// Inicia el tracking AR
@@ -234,7 +286,8 @@ class ARService {
   // ==========================================================================
 
   /// Obtiene información de estado para debug
-  Map<String, dynamic> getDebugInfo() {
+  Ma_arCoreController?.dispose();
+    p<String, dynamic> getDebugInfo() {
     return {
       'is_tracking': _isTracking,
       'planes_detected': _planesDetected,
