@@ -134,9 +134,8 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
   Future<void> _updateArrowPosition() async {
     if (!_arViewReady || _arObjectManager == null || _arSessionManager == null) return;
 
-    // Calcular dirección hacia el destino
-    Vector3 direction = widget.destination - widget.currentPosition;
-    double targetAngle = math.atan2(direction.x, direction.z);
+    // La flecha siempre apunta al norte (ángulo 0)
+    const double northAngle = 0.0;
     
     // Obtener la pose actual de la cámara
     Matrix4? cameraPose = await _arSessionManager!.getCameraPose();
@@ -162,10 +161,10 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
 
     // Actualizar o crear el nodo de la flecha
     if (_arrowNode == null && _model3DAvailable) {
-      await _createArrowNode(arrowPosition, targetAngle);
+      await _createArrowNode(arrowPosition, northAngle);
     } else if (_arrowNode != null) {
       // Actualizar posición del nodo para seguir la cámara
-      await _updateArrowTransform(arrowPosition, targetAngle);
+      await _updateArrowTransform(arrowPosition, northAngle);
     }
   }
 
@@ -174,7 +173,7 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
       debugPrint('🎯 ============================================');
       debugPrint('🎯 Creando nodo de flecha 3D (seguirá cámara)');
       debugPrint('🎯 Posición inicial: $position');
-      debugPrint('🎯 Ángulo: $angle rad (${angle * 180 / math.pi}°)');
+      debugPrint('🎯 Ángulo: $angle rad (${angle * 180 / math.pi}°) - APUNTANDO AL NORTE');
       debugPrint('🎯 Escala aplicada: 0.0001 (extremadamente pequeña)');
       debugPrint('🎯 ============================================');
       
@@ -231,7 +230,7 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
         uri: "assets/models/arrow.glb",
         scale: Vector3.all(0.0001), // Escala extremadamente reducida
         position: position, // Posición calculada frente a la cámara
-        eulerAngles: Vector3(0, angle, 0), // Rota para apuntar al destino
+        eulerAngles: Vector3(0, angle, 0), // Rota para apuntar al norte (angle = 0)
         name: 'navigation_arrow_3d',
       );
       
