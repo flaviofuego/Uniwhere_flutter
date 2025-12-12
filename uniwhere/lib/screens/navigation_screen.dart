@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
 import 'package:camera/camera.dart';
+import 'package:ar_flutter_plugin_plus/managers/ar_session_manager.dart';
 import '../models/room_location.dart';
 import '../services/ar_service.dart';
 import '../services/navigation_service.dart';
 import '../services/storage_service.dart';
+import '../services/permissions_service.dart';
 import '../widgets/navigation_panel.dart';
+import '../widgets/ar_navigation_arrow.dart';
 import '../widgets/debug_panel.dart';
 import '../utils/constants.dart';
 import 'dart:async';
@@ -26,11 +29,17 @@ class _NavigationScreenState extends State<NavigationScreen> {
   late ARService _arService;
   late NavigationService _navigationService;
   late StorageService _storageService;
+  late PermissionsService _permissionsService;
   
   bool _isInitialized = false;
   bool _isNavigating = false;
   bool _debugMode = false;
+  bool _useModel3D = true; // Intentar usar modelo 3D primero
   Timer? _updateTimer;
+  
+  // Sesión AR (usado para control avanzado de la sesión)
+  // ignore: unused_field
+  ARSessionManager? _arSessionManager;
   
   // Cámara
   CameraController? _cameraController;
@@ -44,6 +53,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
   double _currentDistance = 0;
   int _currentTime = 0;
   bool _isOffRoute = false;
+  
+  // Tracking de posición más preciso
+  Vector3 _lastKnownPosition = Vector3.zero();
+  List<Vector3> _positionHistory = [];
+  static const int _maxPositionHistory = 10;
 
   @override
   void initState() {
@@ -51,6 +65,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     _arService = context.read<ARService>();
     _navigationService = context.read<NavigationService>();
     _storageService = context.read<StorageService>();
+    _permissionsService = context.read<PermissionsService>();
     
     _selectedDestination = widget.destination;
     _initialize();
@@ -86,6 +101,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   Future<void> _initialize() async {
     try {
+      // Solicitar permisos primero
+      await _permissionsService.requestCameraPermission();
+
       // Inicializar AR primero
       bool arInitialized = await _arService.initialize();
       if (!arInitialized) {
@@ -143,8 +161,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
   void _updateNavigationState() {
     if (!_isNavigating || !mounted) return;
     
+    // Obtener posición actual del AR
+    Vector3 currentPos = _arService.currentPosition;
+    
+    // Suavizar posición para mayor precisión (promedio móvil)
+    _positionHistory.add(currentPos);
+    if (_positionHistory.length > _maxPositionHistory) {
+      _positionHistory.removeAt(0);
+    }
+    
+    // Calcular posición suavizada
+    Vector3 smoothedPosition = _calculateSmoothedPosition();
+    _lastKnownPosition = smoothedPosition;
+    
     // Actualizar posición en el servicio de navegación
-    _navigationService.updatePosition(_arService.currentPosition);
+    _navigationService.updatePosition(smoothedPosition);
     
     // Actualizar estado
     setState(() {
@@ -152,6 +183,30 @@ class _NavigationScreenState extends State<NavigationScreen> {
       _currentTime = _navigationService.getRemainingTime();
       _isOffRoute = _navigationService.isOffRoute();
     });
+  }
+  
+  /// Calcula una posición suavizada usando promedio móvil
+  Vector3 _calculateSmoothedPosition() {
+    if (_positionHistory.isEmpty) return Vector3.zero();
+    if (_positionHistory.length == 1) return _positionHistory.first;
+    
+    double sumX = 0, sumY = 0, sumZ = 0;
+    double totalWeight = 0;
+    
+    for (int i = 0; i < _positionHistory.length; i++) {
+      // Mayor peso a posiciones más recientes
+      double weight = (i + 1).toDouble();
+      sumX += _positionHistory[i].x * weight;
+      sumY += _positionHistory[i].y * weight;
+      sumZ += _positionHistory[i].z * weight;
+      totalWeight += weight;
+    }
+    
+    return Vector3(
+      sumX / totalWeight,
+      sumY / totalWeight,
+      sumZ / totalWeight,
+    );
   }
 
   void _startNavigation(RoomLocation destination) async {
@@ -237,9 +292,27 @@ class _NavigationScreenState extends State<NavigationScreen> {
     super.dispose();
   }
 
-  /// Widget para mostrar la vista AR, cámara o un fondo de respaldo
+  /// Widget para mostrar la vista AR con flecha de navegación
   Widget _buildCameraBackground() {
-    // Intentar usar ARCore si está disponible
+    // Si estamos navegando, usar el widget de flecha AR
+    if (_isNavigating && _selectedDestination != null) {
+      return ARNavigationArrow(
+        destination: _selectedDestination!.position,
+        currentPosition: _lastKnownPosition,
+        distance: _currentDistance,
+        useModel3D: _useModel3D,
+        onSessionCreated: (sessionManager) {
+          _arSessionManager = sessionManager;
+          debugPrint('✅ Sesión AR conectada para navegación');
+        },
+        onPositionUpdated: (position) {
+          // Actualizar posición desde el tracking AR real
+          _arService.updatePosition(position);
+        },
+      );
+    }
+    
+    // Vista AR sin navegación activa
     try {
       return _arService.getARCoreView(
         onViewCreated: (controller) {
@@ -277,21 +350,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
           ),
         ),
         child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.camera_alt_outlined, size: 64, color: Colors.white30),
-            SizedBox(height: 16),
-            Text(
-              'Cámara no disponible',
-              style: TextStyle(color: Colors.white30),
-            ),
-          ],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.camera_alt_outlined, size: 64, color: Colors.white30),
+              SizedBox(height: 16),
+              Text(
+                'Cámara no disponible',
+                style: TextStyle(color: Colors.white30),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -306,42 +379,43 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Vista de cámara real o fondo de respaldo
+          // Vista de cámara AR con flecha integrada
           _buildCameraBackground(),
           
-          // Indicador de tracking
-          Positioned(
-            top: 50,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: _arService.planesDetected
-                      ? AppConstants.successColor
-                      : AppConstants.warningColor,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _arService.planesDetected
-                          ? Icons.check_circle
-                          : Icons.warning,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _arService.planesDetected
-                          ? 'Tracking Activo'
-                          : 'Buscando planos...',
-                      style: const TextStyle(
+          // Indicador de tracking (solo si NO estamos navegando, ya que la flecha AR lo muestra)
+          if (!_isNavigating)
+            Positioned(
+              top: 50,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _arService.planesDetected
+                        ? AppConstants.successColor
+                        : AppConstants.warningColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _arService.planesDetected
+                            ? Icons.check_circle
+                            : Icons.warning,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _arService.planesDetected
+                            ? 'Tracking Activo'
+                            : 'Buscando planos...',
+                        style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
@@ -352,68 +426,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
             ),
           ),
           
-          // Simulación de flecha AR apuntando al destino
-          if (_isNavigating && _selectedDestination != null)
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.navigation,
-                    size: 100,
-                    color: AppConstants.getArrowColorByDistance(_currentDistance),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      AppConstants.formatDistance(_currentDistance),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Text(
-                      'Destino: ${_selectedDestination!.name}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          
           // Panel de debug
           if (_debugMode)
             DebugPanel(
               debugInfo: {
                 'AR Tracking': _arService.isTracking ? 'Activo' : 'Inactivo',
                 'Planos': '${_arService.detectedPlanesCount}',
-                'Posición': _arService.currentPosition.toString(),
+                'Posición': _lastKnownPosition.toString(),
+                'Posición suavizada': 'Sí (${_positionHistory.length} muestras)',
                 'Navegando': _isNavigating ? 'Sí' : 'No',
                 'Distancia': '${_currentDistance.toStringAsFixed(2)}m',
                 'Fuera de ruta': _isOffRoute ? 'Sí' : 'No',
+                'Modelo 3D': _useModel3D ? 'Habilitado' : 'Deshabilitado',
               },
             ),
           

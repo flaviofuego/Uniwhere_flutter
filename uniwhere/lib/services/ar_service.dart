@@ -72,24 +72,28 @@ class ARService {
     _arAnchorManager = anchorManager;
     _arLocationManager = locationManager;
 
-    _arSessionManager!.onInitialize(
-      showFeaturePoints: false,
-      showPlanes: true,
-      customPlaneTexturePath: "Images/triangle.png",
-      showWorldOrigin: true,
-      handleTaps: false,
-    );
-    _arObjectManager!.onInitialize();
+    try {
+      _arSessionManager!.onInitialize(
+        showFeaturePoints: false,
+        showPlanes: true,
+        // customPlaneTexturePath: "Images/triangle.png", // Comentado porque la imagen no existe
+        showWorldOrigin: true,
+        handleTaps: false,
+      );
+      _arObjectManager!.onInitialize();
 
-    _isTracking = true;
-    onTrackingStateChanged?.call(true);
-    
-    // Simulamos detección de planos ya que el plugin los maneja visualmente
-    _planesDetected = true;
-    _detectedPlanesCount = 1;
-    onPlanesDetectedCountChanged?.call(_detectedPlanesCount);
-    
-    debugPrint('✅ ARView configurado');
+      _isTracking = true;
+      onTrackingStateChanged?.call(true);
+      
+      // Simulamos detección de planos ya que el plugin los maneja visualmente
+      _planesDetected = true;
+      _detectedPlanesCount = 1;
+      onPlanesDetectedCountChanged?.call(_detectedPlanesCount);
+      
+      debugPrint('✅ ARView configurado correctamente');
+    } catch (e) {
+      debugPrint('❌ Error al configurar ARView: $e');
+    }
   }
 
   /// Obtiene el widget de vista AR
