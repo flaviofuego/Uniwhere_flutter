@@ -156,9 +156,9 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
       -cameraPose.getColumn(2).z,
     ).normalized();
     
-    // Posicionar la flecha 1.5m frente a la cámara
-    Vector3 arrowPosition = cameraPosition + (cameraForward * 1.5);
-    arrowPosition.y -= 0.3; // Ligeramente abajo del nivel de ojos
+    // Posicionar la flecha 4m frente a la cámara (más lejos = parece más pequeña)
+    Vector3 arrowPosition = cameraPosition + (cameraForward * 9.0);
+    arrowPosition.y -= 0.5; // Ligeramente abajo del nivel de ojos
 
     // Actualizar o crear el nodo de la flecha
     if (_arrowNode == null && _model3DAvailable) {
@@ -175,13 +175,14 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
       debugPrint('🎯 Creando nodo de flecha 3D (seguirá cámara)');
       debugPrint('🎯 Posición inicial: $position');
       debugPrint('🎯 Ángulo: $angle rad (${angle * 180 / math.pi}°)');
+      debugPrint('🎯 Escala aplicada: 0.0001 (extremadamente pequeña)');
       debugPrint('🎯 ============================================');
       
       // Crear nodo AR con modelo GLB
       _arrowNode = ARNode(
         type: NodeType.localGLB,
         uri: "assets/models/arrow.glb",
-        scale: Vector3.all(0.1), // Escala reducida 80%
+        scale: Vector3.all(0.0001), // Escala extremadamente reducida
         position: position,
         eulerAngles: Vector3(0, angle, 0),
         name: 'navigation_arrow_3d',
@@ -228,7 +229,7 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
       _arrowNode = ARNode(
         type: NodeType.localGLB,
         uri: "assets/models/arrow.glb",
-        scale: Vector3.all(0.1), // Escala reducida 80%
+        scale: Vector3.all(0.0001), // Escala extremadamente reducida
         position: position, // Posición calculada frente a la cámara
         eulerAngles: Vector3(0, angle, 0), // Rota para apuntar al destino
         name: 'navigation_arrow_3d',
