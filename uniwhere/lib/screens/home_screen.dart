@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/room_location.dart';
-import '../services/storage_service.dart';
-import '../services/permissions_service.dart';
-import '../widgets/location_card.dart';
-import '../utils/constants.dart';
-import 'calibration_screen.dart';
-import 'navigation_screen.dart';
-import 'map_screen.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
+import '../config.dart';
+import '../models/point_of_interest.dart';
+import '../providers/navigation_provider.dart';
+import 'ar_navigation_screen.dart';
+import 'settings_screen.dart';
 
-/// Pantalla de inicio de la aplicación
-/// Muestra opciones principales y lista de ubicaciones
+/// Pantalla principal de UNIwhere.
+/// Muestra:
+///   - Lista de puntos de interés del campus (desde /points_of_interest)
+///   - Barra de búsqueda para filtrar destinos
+///   - Botón "Navegar" que lleva a la pantalla AR
+///   - Indicador de conexión con el backend
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,372 +21,468 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late StorageService _storageService;
-  late PermissionsService _permissionsService;
-  List<RoomLocation> _locations = [];
-  bool _isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  PointOfInterest? _selectedPoi;
 
   @override
   void initState() {
     super.initState();
-    _storageService = context.read<StorageService>();
-    _permissionsService = context.read<PermissionsService>();
-    _loadLocations();
+    // Cargar POIs y verificar conexión al entrar a la pantalla
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initScreen());
   }
 
-  Future<void> _loadLocations() async {
-    setState(() => _isLoading = true);
-    
-    try {
-      final locations = _storageService.getAllLocations();
-      setState(() {
-        _locations = locations;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar ubicaciones: $e')),
-        );
-      }
-    }
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
-  Future<void> _checkPermissionsAndNavigate(Widget screen) async {
-    final hasPermissions = await _permissionsService.hasAllPermissions();
-    
-    if (!hasPermissions) {
-      final granted = await _permissionsService.requestAllPermissions();
-      
-      if (!granted['camera']!) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Se requiere permiso de cámara para AR'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-        return;
-      }
-      
-      if (!granted['location']!) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Se requiere permiso de ubicación para navegación'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-        return;
-      }
-    }
-    
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => screen),
-      );
-    }
+  /// Carga inicial: verificar conexión y cargar puntos de interés
+  Future<void> _initScreen() async {
+    final nav = context.read<NavigationProvider>();
+    await nav.checkConnection();
+    await nav.loadPointsOfInterest();
   }
 
-  List<RoomLocation> get _filteredLocations {
-    if (_searchQuery.isEmpty) return _locations;
-    
-    return _locations.where((location) {
-      return location.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          location.description.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          location.tags.any((tag) => tag.toLowerCase().contains(_searchQuery.toLowerCase()));
+  /// Filtra la lista de POIs según la búsqueda del usuario
+  List<PointOfInterest> _filteredPois(List<PointOfInterest> pois) {
+    if (_searchQuery.isEmpty) return pois;
+    final q = _searchQuery.toLowerCase();
+    return pois.where((p) {
+      return p.name.toLowerCase().contains(q) ||
+          (p.description?.toLowerCase().contains(q) ?? false) ||
+          (p.building?.toLowerCase().contains(q) ?? false) ||
+          (p.category?.toLowerCase().contains(q) ?? false);
     }).toList();
+  }
+
+  /// Navega a la pantalla AR con el destino seleccionado
+  void _startNavigation(PointOfInterest poi) {
+    final nav = context.read<NavigationProvider>();
+    nav.selectDestination(poi);
+    nav.startNavigation();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ARNavigationScreen(),
+      ),
+    ).then((_) {
+      // Al volver, limpiar estado de navegación
+      nav.stopNavigation();
+      setState(() => _selectedPoi = null);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AR Home Navigator'),
-        backgroundColor: AppConstants.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          // Botón de mapa
-          IconButton(
-            icon: const Icon(Icons.map),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const MapScreen()),
-              );
-            },
-            tooltip: 'Ver Mapa 2D',
+      backgroundColor: AppConfig.surfaceColor,
+      appBar: _buildAppBar(),
+      body: _buildBody(),
+      floatingActionButton: _selectedPoi != null ? _buildNavFab() : null,
+    );
+  }
+
+  // ============================================================================
+  // APP BAR
+  // ============================================================================
+
+  AppBar _buildAppBar() {
+    return AppBar(
+      title: const Text('UNIwhere'),
+      actions: [
+        // Indicador de conexión al backend
+        Consumer<NavigationProvider>(
+          builder: (_, nav, __) => _ConnectionDot(status: nav.connectionStatus),
+        ),
+        // Botón de configuración
+        IconButton(
+          icon: const Icon(Icons.settings_rounded),
+          tooltip: 'Configuración',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          ).then((_) => _initScreen()), // Recargar al volver de settings
+        ),
+      ],
+    );
+  }
+
+  // ============================================================================
+  // CUERPO PRINCIPAL
+  // ============================================================================
+
+  Widget _buildBody() {
+    return Consumer<NavigationProvider>(
+      builder: (context, nav, _) {
+        return Column(
+          children: [
+            // Header con descripción y barra de búsqueda
+            _buildHeader(),
+            // Lista de POIs o estados de carga/error
+            Expanded(child: _buildPoiContent(nav)),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================================
+  // HEADER CON BUSCADOR
+  // ============================================================================
+
+  Widget _buildHeader() {
+    return Container(
+      color: AppConfig.primaryColor,
+      padding: const EdgeInsets.fromLTRB(
+        AppConfig.horizontalPadding,
+        0,
+        AppConfig.horizontalPadding,
+        20,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Subtítulo
+          Text(
+            '¿A dónde vas hoy?',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha:0.85),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Barra de búsqueda
+          TextField(
+            controller: _searchController,
+            onChanged: (v) => setState(() => _searchQuery = v),
+            decoration: InputDecoration(
+              hintText: 'Buscar: aula, biblioteca, laboratorio...',
+              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+              prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, color: Colors.grey),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Header con gradiente
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppConstants.primaryColor,
-                  AppConstants.primaryColor.withOpacity(0.8),
-                ],
-              ),
+    );
+  }
+
+  // ============================================================================
+  // CONTENIDO DE LA LISTA DE POIs
+  // ============================================================================
+
+  Widget _buildPoiContent(NavigationProvider nav) {
+    // Estado: cargando
+    if (nav.loadingPois) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SpinKitFadingCircle(color: AppConfig.primaryColor, size: 48),
+            const SizedBox(height: 16),
+            const Text('Cargando destinos...', style: TextStyle(fontSize: 14)),
+          ],
+        ),
+      );
+    }
+
+    // Estado: error de conexión
+    if (nav.poisError != null) {
+      return _buildErrorView(nav.poisError!);
+    }
+
+    // Estado: sin datos
+    if (nav.pois.isEmpty) {
+      return _buildEmptyView();
+    }
+
+    // Lista filtrada de POIs
+    final filtered = _filteredPois(nav.pois);
+    if (filtered.isEmpty) {
+      return _buildNoResultsView();
+    }
+
+    return RefreshIndicator(
+      color: AppConfig.primaryColor,
+      onRefresh: () => nav.loadPointsOfInterest(),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(AppConfig.horizontalPadding),
+        itemCount: filtered.length,
+        itemBuilder: (_, i) => _PoiCard(
+          poi: filtered[i],
+          isSelected: _selectedPoi?.id == filtered[i].id,
+          onTap: () => setState(() {
+            _selectedPoi =
+                _selectedPoi?.id == filtered[i].id ? null : filtered[i];
+          }),
+          onNavigate: () => _startNavigation(filtered[i]),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================================
+  // ESTADOS VACÍOS / ERROR
+  // ============================================================================
+
+  Widget _buildErrorView(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off_rounded, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.all(AppConstants.defaultPadding),
-                child: Column(
-                  children: [
-                    // Búsqueda
-                    TextField(
-                      onChanged: (value) {
-                        setState(() => _searchQuery = value);
-                      },
-                      decoration: InputDecoration(
-                        hintText: '¿A dónde quieres ir?',
-                        prefixIcon: const Icon(Icons.search),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            AppConstants.buttonBorderRadius,
-                          ),
-                          borderSide: BorderSide.none,
+            const SizedBox(height: 8),
+            const Text(
+              'Verifica tu conexión WiFi y que el backend esté activo.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _initScreen,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyView() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.map_outlined, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          const Text(
+            'No hay destinos disponibles.',
+            style: TextStyle(fontSize: 14, color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _initScreen,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Recargar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoResultsView() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.search_off_rounded, size: 48, color: Colors.grey),
+          const SizedBox(height: 12),
+          Text(
+            'Sin resultados para "$_searchQuery"',
+            style: const TextStyle(fontSize: 14, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================================
+  // FAB DE NAVEGACIÓN
+  // ============================================================================
+
+  Widget _buildNavFab() {
+    return FloatingActionButton.extended(
+      onPressed: () => _startNavigation(_selectedPoi!),
+      backgroundColor: AppConfig.primaryColor,
+      foregroundColor: Colors.white,
+      icon: const Icon(Icons.navigation_rounded),
+      label: Text(
+        'Navegar a ${_selectedPoi!.name}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+// ==============================================================================
+// WIDGET: TARJETA DE PUNTO DE INTERÉS
+// ==============================================================================
+
+class _PoiCard extends StatelessWidget {
+  final PointOfInterest poi;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final VoidCallback onNavigate;
+
+  const _PoiCard({
+    required this.poi,
+    required this.isSelected,
+    required this.onTap,
+    required this.onNavigate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Card(
+        elevation: isSelected ? 5 : AppConfig.cardElevation,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConfig.borderRadius),
+          side: isSelected
+              ? const BorderSide(color: AppConfig.primaryColor, width: 2)
+              : BorderSide.none,
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppConfig.borderRadius),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                // Ícono de categoría
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppConfig.primaryColor.withValues(alpha:0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      poi.categoryIcon,
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+
+                // Información del POI
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        poi.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
                         ),
                       ),
-                    ),
-                    
-                    const SizedBox(height: AppConstants.defaultPadding),
-                    
-                    // Botones principales
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              _checkPermissionsAndNavigate(
-                                const CalibrationScreen(),
-                              );
-                            },
-                            icon: const Icon(Icons.location_searching),
-                            label: const Text('Calibración'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: AppConstants.primaryColor,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppConstants.buttonBorderRadius,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppConstants.defaultSpacing),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _locations.isEmpty
-                                ? null
-                                : () {
-                                    _checkPermissionsAndNavigate(
-                                      const NavigationScreen(),
-                                    );
-                                  },
-                            icon: const Icon(Icons.navigation),
-                            label: const Text('Navegación'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: AppConstants.primaryColor,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppConstants.buttonBorderRadius,
-                                ),
-                              ),
-                            ),
+                      if (poi.subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          poi.subtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
                           ),
                         ),
                       ],
-                    ),
-                  ],
+                      if (poi.description != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          poi.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
+
+                // Botón navegar (solo si está seleccionado)
+                if (isSelected) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: onNavigate,
+                    icon: const Icon(Icons.navigation_rounded),
+                    color: AppConfig.primaryColor,
+                    tooltip: 'Ir a ${poi.name}',
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppConfig.primaryColor.withValues(alpha:0.1),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          
-          // Lista de ubicaciones
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredLocations.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.location_off,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _searchQuery.isEmpty
-                                  ? 'No hay ubicaciones guardadas'
-                                  : 'No se encontraron resultados',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Usa el modo calibración para mapear tu casa',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[500],
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadLocations,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.only(
-                            top: AppConstants.defaultSpacing,
-                            bottom: 80, // Espacio para el FAB
-                          ),
-                          itemCount: _filteredLocations.length,
-                          itemBuilder: (context, index) {
-                            final location = _filteredLocations[index];
-                            return LocationCard(
-                              location: location,
-                              onTap: () {
-                                _showLocationDetails(location);
-                              },
-                              onNavigate: () {
-                                _startNavigationTo(location);
-                              },
-                            );
-                          },
-                        ),
-                      ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          _checkPermissionsAndNavigate(const CalibrationScreen());
-        },
-        icon: const Icon(Icons.add_location),
-        label: const Text('Nueva Ubicación'),
-        backgroundColor: AppConstants.primaryColor,
+        ),
       ),
     );
   }
+}
 
-  void _showLocationDetails(RoomLocation location) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-            ),
-            child: SingleChildScrollView(
-              controller: scrollController,
-              child: Padding(
-                padding: const EdgeInsets.all(AppConstants.defaultPadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      location.name,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      location.description,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: location.tags.map((tag) {
-                        return Chip(
-                          label: Text(tag),
-                          backgroundColor: AppConstants.primaryColor.withOpacity(0.1),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _startNavigationTo(location);
-                        },
-                        icon: const Icon(Icons.navigation),
-                        label: const Text('Navegar aquí'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppConstants.primaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(
-                              AppConstants.buttonBorderRadius,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
+// ==============================================================================
+// WIDGET: INDICADOR DE CONEXIÓN
+// ==============================================================================
+
+/// Punto de color en el AppBar que indica el estado de conexión al backend
+class _ConnectionDot extends StatelessWidget {
+  final ConnectionStatus status;
+
+  const _ConnectionDot({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label) = switch (status) {
+      ConnectionStatus.connected => (Colors.greenAccent, 'Backend conectado'),
+      ConnectionStatus.disconnected => (Colors.redAccent, 'Sin conexión con backend'),
+      ConnectionStatus.unknown => (Colors.grey, 'Verificando conexión...'),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Tooltip(
+        message: label,
+        child: Container(
+          width: 10,
+          height: 10,
+          margin: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: color.withValues(alpha:0.5), blurRadius: 4),
+            ],
+          ),
+        ),
       ),
-    );
-  }
-
-  void _startNavigationTo(RoomLocation location) {
-    _checkPermissionsAndNavigate(
-      NavigationScreen(destination: location),
     );
   }
 }

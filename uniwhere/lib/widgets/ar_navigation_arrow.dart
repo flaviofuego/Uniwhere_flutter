@@ -12,7 +12,7 @@ import 'package:ar_flutter_plugin_plus/datatypes/config_planedetection.dart';
 import 'package:ar_flutter_plugin_plus/models/ar_node.dart';
 import 'package:ar_flutter_plugin_plus/models/ar_anchor.dart';
 import 'package:ar_flutter_plugin_plus/datatypes/node_types.dart';
-import '../utils/constants.dart';
+import '../config.dart';
 
 /// Widget que muestra una flecha 3D AR que apunta hacia el destino
 class ARNavigationArrow extends StatefulWidget {
@@ -41,11 +41,13 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
     with SingleTickerProviderStateMixin {
   ARSessionManager? _arSessionManager;
   ARObjectManager? _arObjectManager;
+  // ignore: unused_field
   ARAnchorManager? _arAnchorManager;
   // ignore: unused_field
   ARLocationManager? _arLocationManager;
 
   ARNode? _arrowNode;
+  // ignore: unused_field
   ARAnchor? _arrowAnchor;
   
   bool _arViewReady = false;
@@ -282,7 +284,7 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
     double angle = math.atan2(direction.x, direction.z);
     
     // Color basado en distancia
-    Color arrowColor = AppConstants.getArrowColorByDistance(widget.distance);
+    Color arrowColor = AppConfig.arrowColorByDistance(widget.distance);
     
     return AnimatedBuilder(
       animation: _animationController,
@@ -300,7 +302,7 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: arrowColor.withOpacity(0.5),
+                      color: arrowColor.withValues(alpha:0.5),
                       blurRadius: 30,
                       spreadRadius: 10,
                     ),
@@ -317,8 +319,8 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            arrowColor.withOpacity(0.8),
-                            arrowColor.withOpacity(0.3),
+                            arrowColor.withValues(alpha:0.8),
+                            arrowColor.withValues(alpha:0.3),
                           ],
                         ),
                       ),
@@ -340,7 +342,7 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.5),
+                          color: Colors.white.withValues(alpha:0.5),
                           width: 3,
                         ),
                       ),
@@ -366,11 +368,11 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.7),
+              color: Colors.black.withValues(alpha:0.7),
               borderRadius: BorderRadius.circular(25),
             ),
             child: Text(
-              AppConstants.formatDistance(widget.distance),
+              AppConfig.formatDistance(widget.distance),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 28,
@@ -385,7 +387,7 @@ class _ARNavigationArrowState extends State<ARNavigationArrow>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.8),
+              color: Colors.green.withValues(alpha:0.8),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -467,7 +469,7 @@ class _ArrowPainter extends CustomPainter {
     
     // Borde
     final borderPaint = Paint()
-      ..color = color.withOpacity(0.8)
+      ..color = color.withValues(alpha:0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     

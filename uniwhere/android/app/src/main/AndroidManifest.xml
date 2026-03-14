@@ -1,26 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Permisos requeridos para AR y navegación -->
+    <!-- Cámara: requerida para vista AR y captura de frames para localización -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Internet: comunicación con el backend FastAPI en la red local -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    
-    <!-- Permisos de ubicación para navegación -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    
-    <!-- Features requeridas para AR -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Features requeridas: cámara obligatoria, ARCore opcional (se maneja en runtime) -->
     <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
-    
+
+    <!-- Permite verificar si ARCore está instalado -->
     <queries>
         <package android:name="com.google.ar.core" />
     </queries>
 
     <application
-        android:label="AR Home Navigator"
+        android:label="UNIwhere"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         

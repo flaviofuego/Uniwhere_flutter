@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"E:/Repos Git/Uniwhere_flutter/uniwhere\" && rm -f lib/utils/constants.dart lib/services/navigation_service.dart && echo \"OK\" && ls lib/utils/ && ls lib/services/)",
+      "Bash(cd \"E:/Repos Git/Uniwhere_flutter/uniwhere\" && flutter analyze lib/ 2>&1)",
+      "Bash(cd \"E:/Repos Git/Uniwhere_flutter/uniwhere\" && flutter analyze lib/screens/ar_navigation_screen.dart 2>&1)",
+      "Bash(grep -r \"NodeType\" \"E:/Repos Git/Uniwhere_flutter/uniwhere/.dart_tool\" --include=\"*.dart\" -l 2>/dev/null | head -5)"
+    ]
+  }
+}

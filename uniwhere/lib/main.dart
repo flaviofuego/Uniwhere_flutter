@@ -1,154 +1,133 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'models/room_location.dart';
-import 'services/ar_service.dart';
-import 'services/navigation_service.dart';
-import 'services/storage_service.dart';
-import 'services/vps_service.dart';
-import 'services/permissions_service.dart';
-import 'screens/home_screen.dart';
-import 'utils/constants.dart';
+import 'config.dart';
+import 'providers/navigation_provider.dart';
+import 'providers/settings_provider.dart';
+import 'services/backend_service.dart';
+import 'screens/splash_screen.dart';
 
-/// Punto de entrada principal de la aplicación
-/// AR Home Navigator Demo - Prototipo de navegación indoor con AR + VPS
+/// Punto de entrada de UNIwhere
+/// Inicializa providers y lanza la aplicación
 void main() async {
-  // Asegurar que los bindings de Flutter estén inicializados
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Configurar orientación portrait
+
+  // Forzar orientación vertical en pantallas de navegación AR
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  
-  // Inicializar Hive y registrar adaptadores ANTES de cualquier uso
-  await Hive.initFlutter();
-  
-  // Registrar adaptador siempre (verificar con debug)
-  if (!Hive.isAdapterRegistered(0)) {
-    Hive.registerAdapter(RoomLocationAdapter());
-    debugPrint('✅ RoomLocationAdapter registrado correctamente');
-  } else {
-    debugPrint('ℹ️ RoomLocationAdapter ya estaba registrado');
-  }
-  
-  // Inicializar servicios
-  final storageService = StorageService();
-  await storageService.initialize();
-  
-  runApp(MyApp(storageService: storageService));
+
+  // Cargar configuraciones guardadas antes de iniciar la app
+  final settings = SettingsProvider();
+  await settings.load();
+
+  runApp(UniwhereApp(settings: settings));
 }
 
 /// Widget raíz de la aplicación
-class MyApp extends StatelessWidget {
-  final StorageService storageService;
+class UniwhereApp extends StatelessWidget {
+  final SettingsProvider settings;
 
-  const MyApp({super.key, required this.storageService});
+  const UniwhereApp({super.key, required this.settings});
 
   @override
   Widget build(BuildContext context) {
-    // Usar MultiProvider para inyección de dependencias
+    // Crear el BackendService con la URL guardada en settings
+    final backendService = BackendService(baseUrl: settings.baseUrl);
+
     return MultiProvider(
       providers: [
-        // Servicios singleton
-        Provider<StorageService>.value(value: storageService),
-        Provider<PermissionsService>(create: (_) => PermissionsService()),
-        Provider<ARService>(create: (_) => ARService()),
-        Provider<NavigationService>(create: (_) => NavigationService()),
-        Provider<VPSService>(create: (_) => VPSService()),
+        // Settings: accesible desde cualquier pantalla
+        ChangeNotifierProvider<SettingsProvider>.value(value: settings),
+
+        // NavigationProvider: estado central de navegación
+        ChangeNotifierProvider<NavigationProvider>(
+          create: (_) => NavigationProvider(backendService: backendService),
+        ),
       ],
-      child: MaterialApp(
-        title: 'AR Home Navigator',
-        debugShowCheckedModeBanner: false,
-        
-        // Tema de la aplicación
-        theme: ThemeData(
-          // Colores principales
-          primaryColor: AppConstants.primaryColor,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: AppConstants.primaryColor,
-            primary: AppConstants.primaryColor,
-            secondary: AppConstants.secondaryColor,
-          ),
-          
-          // Tipografía
-          fontFamily: 'Roboto',
-          textTheme: const TextTheme(
-            headlineLarge: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: AppConstants.textPrimaryColor,
-            ),
-            headlineMedium: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppConstants.textPrimaryColor,
-            ),
-            titleLarge: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: AppConstants.textPrimaryColor,
-            ),
-            bodyLarge: TextStyle(
-              fontSize: 16,
-              color: AppConstants.textPrimaryColor,
-            ),
-            bodyMedium: TextStyle(
-              fontSize: 14,
-              color: AppConstants.textPrimaryColor,
-            ),
-          ),
-          
-          // Estilo de botones
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(
-                  AppConstants.buttonBorderRadius,
+      child: Consumer<SettingsProvider>(
+        builder: (context, settingsProvider, _) {
+          // Sincronizar URL del backend cuando cambia en settings
+          final navProvider =
+              Provider.of<NavigationProvider>(context, listen: false);
+          navProvider.updateBackendUrl(settingsProvider.baseUrl);
+
+          return MaterialApp(
+            title: AppConfig.appName,
+            debugShowCheckedModeBanner: false,
+
+            // ==================================================================
+            // TEMA - Material Design 3 con colores universitarios
+            // ==================================================================
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: AppConfig.primaryColor,
+                primary: AppConfig.primaryColor,
+                onPrimary: AppConfig.onPrimaryColor,
+                surface: AppConfig.surfaceColor,
+              ),
+
+              // AppBar con el color universitario
+              appBarTheme: const AppBarTheme(
+                backgroundColor: AppConfig.primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                centerTitle: true,
+                titleTextStyle: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+
+              // Botones elevados con el color primario
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppConfig.primaryColor,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppConfig.borderRadius),
+                  ),
+                ),
+              ),
+
+              // Cards con bordes redondeados
+              cardTheme: CardThemeData(
+                elevation: AppConfig.cardElevation,
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppConfig.borderRadius),
+                ),
+              ),
+
+              // Campos de texto
+              inputDecorationTheme: InputDecorationTheme(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+              ),
+
+              // Snackbars flotantes
+              snackBarTheme: SnackBarThemeData(
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
             ),
-          ),
-          
-          // Estilo de tarjetas
-          cardTheme: CardThemeData(
-            elevation: AppConstants.cardElevation,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.cardBorderRadius,
-              ),
-            ),
-          ),
-          
-          // AppBar
-          appBarTheme: const AppBarTheme(
-            elevation: 0,
-            centerTitle: true,
-          ),
-          
-          // Snackbar
-          snackBarTheme: SnackBarThemeData(
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          
-          // Input fields
-          inputDecorationTheme: InputDecorationTheme(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            filled: true,
-            fillColor: Colors.grey[50],
-          ),
-        ),
-        
-        // Pantalla inicial
-        home: const HomeScreen(),
+
+            // Pantalla inicial: SplashScreen
+            home: const SplashScreen(),
+          );
+        },
       ),
     );
   }

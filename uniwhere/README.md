@@ -1,318 +1,171 @@
-# AR Home Navigator Demo
+# UNIwhere
 
-Aplicación de demostración en Flutter que simula un sistema de **AR Wayfinding + VPS** (Visual Positioning System) para navegación interior. Este prototipo está diseñado para demostrar la viabilidad de un sistema de navegación AR en campus universitario.
+Sistema de **navegación indoor con Realidad Aumentada** para campus universitarios. La app localiza al usuario dentro del edificio comparando la imagen de la cámara contra un mapa 3D reconstruido con COLMAP, y lo guía con flechas AR hasta el destino.
 
-## 🎯 Características Principales
+## Arquitectura del sistema
 
-### 1. AR Wayfinding (Navegación con Realidad Aumentada)
-- ✅ Detección de planos horizontales simulada
-- ✅ Sistema de waypoints/rutas entre ubicaciones
-- ✅ Flechas 3D que guían al destino
-- ✅ Indicador de distancia y dirección en tiempo real
-- ✅ Código de color según proximidad (verde/amarillo/rojo)
+```
+Smartphone (Flutter)
+        │  frame JPEG 1280×720
+        ▼
+Backend FastAPI (localhost:8000)
+        │  SuperPoint + SuperGlue (hloc)
+        │  Pose estimada contra modelo COLMAP
+        ▼
+Mapa 3D del campus
+(COLMAP · SIMPLE_RADIAL · videos smartphone)
+```
 
-### 2. VPS Simulado (Sistema de Posicionamiento Visual)
-- ✅ Framework para reconocimiento de imágenes de referencia
-- ✅ Capacidad de relocalization
-- ✅ Ajuste de posición al detectar puntos de referencia
-- ✅ Notificaciones de actualización de posición
+**Backend endpoints:**
 
-### 3. Fichas de Información AR
-- ✅ Paneles flotantes con información de ubicaciones
-- ✅ Datos de habitaciones (nombre, descripción, características)
-- ✅ Botones interactivos ("Navegar aquí", "Cerrar")
-- ✅ Animaciones suaves de aparición/desaparición
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/localize` | Recibe imagen → devuelve pose 3D + nodo más cercano |
+| `GET`  | `/route?origin=X&destination=Y` | Devuelve lista de waypoints entre dos nodos |
+| `GET`  | `/points_of_interest` | Devuelve todos los nodos del mapa |
 
-### 4. Modo Calibración
-- ✅ Mapeo de espacios interiores
-- ✅ Marcado de puntos de interés
-- ✅ Captura de fotos de referencia para VPS
-- ✅ Sistema de categorización de ubicaciones
+## Pantallas
 
-### 5. Mapa 2D
-- ✅ Vista cenital del espacio mapeado
-- ✅ Visualización de posición actual
-- ✅ Ruta trazada durante navegación
-- ✅ Grilla de referencia con coordenadas
+| Pantalla | Descripción |
+|----------|-------------|
+| **SplashScreen** | Logo animado, carga inicial |
+| **HomeScreen** | Lista de destinos desde `/points_of_interest`, búsqueda, indicador de conexión al backend |
+| **ARNavigationScreen** | Vista AR en tiempo real, flechas 3D/2D, localización cada 2 s vía `/localize` |
+| **SettingsScreen** | IP del backend configurable, modo debug (muestra coordenadas de pose) |
 
-## 📋 Requisitos del Sistema
+## Requisitos
 
-### Dispositivos Compatibles
-- **Android:** Versión 7.0 (API 24) o superior con soporte ARCore
-- **iOS:** iOS 11.0 o superior con soporte ARKit
-- Cámara funcional
-- Giroscopio y acelerómetro
-- Al menos 2GB de RAM
+### Dispositivo
+- Android 7.0 (API 24) o superior
+- ARCore Services instalado
+- Cámara trasera funcional
 
-### Software Necesario
+### Backend
+- Python con FastAPI corriendo en la misma red WiFi
+- Modelo COLMAP del campus generado con videos de smartphone
+- hloc con SuperPoint + SuperGlue para localización visual
+
+### Desarrollo
 - Flutter SDK 3.9.2 o superior
-- Android Studio / Xcode
-- Dispositivo físico (emuladores no soportan AR completamente)
+- Dispositivo físico (los emuladores no soportan AR)
 
-## 🚀 Instalación
+## Instalación
 
-### 1. Clonar el Repositorio
 ```bash
 git clone https://github.com/flaviofuego/Uniwhere_flutter.git
 cd Uniwhere_flutter/uniwhere
-```
-
-### 2. Instalar Dependencias
-```bash
 flutter pub get
-```
-
-### 3. Configuración Android
-```bash
-# Verificar que tu dispositivo esté conectado
-flutter devices
-
-# Ejecutar en dispositivo Android
 flutter run
 ```
 
-### 4. Configuración iOS
+En iOS, antes de `flutter run`:
 ```bash
-cd ios
-pod install
-cd ..
-
-# Ejecutar en dispositivo iOS
-flutter run
+cd ios && pod install && cd ..
 ```
 
-## 📱 Guía de Uso
+## Configuración
 
-### Primera Ejecución
+Al iniciar la app por primera vez, ir a **Configuración** e ingresar la IP del backend:
 
-1. **Otorgar Permisos**
-   - La app solicitará permiso de cámara
-   - Permiso de almacenamiento para fotos de referencia
-   - Aceptar todos los permisos para funcionalidad completa
+```
+http://192.168.x.x:8000
+```
 
-2. **Modo Calibración**
-   - Toca "Modo Calibración" en la pantalla de inicio
-   - Camina por tu casa/espacio
-   - Presiona el botón flotante "+" para marcar ubicaciones
-   - Completa el formulario:
-     * Nombre de la ubicación
-     * Categoría (Habitación, Servicio, Recreación, Trabajo)
-     * Descripción breve
-     * (Opcional) Tomar foto de referencia
-   - Repite para cada ubicación importante
-   - Presiona "Finalizar Calibración" cuando termines
+Usar el botón **"Probar conexión"** para verificar que el backend responde antes de navegar.
 
-3. **Modo Navegación**
-   - Vuelve a la pantalla de inicio
-   - Selecciona una ubicación de la lista
-   - O toca "Modo Navegación" y elige un destino
-   - Sigue las flechas AR hacia tu destino
-   - La flecha cambia de color según la distancia:
-     * 🟢 Verde: < 3 metros (cerca)
-     * 🟡 Amarillo: 3-10 metros (medio)
-     * 🔴 Rojo: > 10 metros (lejos)
+## Flujo de localización
 
-4. **Ver Mapa 2D**
-   - Toca el ícono de mapa en la parte superior
-   - Visualiza todas las ubicaciones mapeadas
-   - Ve tu posición actual y ruta activa
+1. `ARView` inicializa la sesión ARCore (sin detección de planos).
+2. Un `Timer` dispara cada **2 segundos**:
+   - Captura un snapshot de la vista AR (`arSessionManager.snapshot()`).
+   - Redimensiona el frame a **1280×720** para que coincida con la resolución de los videos usados en COLMAP.
+   - `POST /localize` → el backend corre SuperPoint + SuperGlue y devuelve la pose en coordenadas del mapa.
+   - `GET /route` → lista de waypoints desde el nodo más cercano hasta el destino.
+3. Se coloca un nodo GLB (`arrow.glb`) en el espacio AR apuntando al siguiente waypoint.
+4. Un overlay 2D animado refuerza la dirección visualmente mientras los nodos 3D se actualizan.
 
-### Funciones Avanzadas
+> **Importante:** la resolución del frame enviado al backend (1280×720) debe coincidir con la resolución de los videos grabados para generar el mapa COLMAP. Si se regrabó el mapa con otra resolución, actualizar las constantes en `ARNavigationScreen._resizeAndCompressJpeg`.
 
-**Modo Debug:**
-- Toca el ícono de bug en las pantallas AR
-- Muestra información técnica:
-  * Estado de tracking AR
-  * Número de planos detectados
-  * Coordenadas actuales (X, Y, Z)
-  * Distancia al destino
-  * Estado de navegación
-
-**Búsqueda:**
-- Usa la barra de búsqueda en inicio
-- Busca por nombre, descripción o tags
-- Resultados filtrados en tiempo real
-
-**Gestión de Ubicaciones:**
-- Máximo 20 ubicaciones permitidas
-- Puedes editar o eliminar ubicaciones desde configuración
-- Reset completo disponible en configuración
-
-## 🏗️ Arquitectura del Proyecto
+## Estructura del proyecto
 
 ```
 lib/
-├── models/              # Modelos de datos
-│   ├── room_location.dart
-│   ├── navigation_path.dart
-│   ├── ar_info_card.dart
-│   └── sample_data.dart
+├── config.dart                   # Colores, URLs, constantes COLMAP
+├── main.dart                     # Entry point, MultiProvider
 │
-├── services/            # Lógica de negocio
-│   ├── ar_service.dart
-│   ├── navigation_service.dart
-│   ├── vps_service.dart
-│   ├── storage_service.dart
-│   └── permissions_service.dart
+├── models/
+│   ├── waypoint.dart             # Nodo del grafo {id, x, y, z}
+│   ├── point_of_interest.dart    # POI con nombre, categoría, edificio
+│   └── navigation_pose.dart      # Resultado de /localize (pose + nearest_node)
 │
-├── screens/             # Pantallas principales
+├── services/
+│   └── backend_service.dart      # HTTP: /localize, /route, /points_of_interest
+│
+├── providers/
+│   ├── navigation_provider.dart  # Estado central (POIs, ruta, pose, conexión)
+│   └── settings_provider.dart    # IP backend + debug mode → SharedPreferences
+│
+├── screens/
+│   ├── splash_screen.dart
 │   ├── home_screen.dart
-│   ├── calibration_screen.dart
-│   ├── navigation_screen.dart
-│   └── map_screen.dart
+│   ├── ar_navigation_screen.dart
+│   └── settings_screen.dart
 │
-├── widgets/             # Componentes reutilizables
-│   ├── location_card.dart
-│   ├── navigation_panel.dart
-│   ├── debug_panel.dart
-│   └── ar_info_card_widget.dart
-│
-├── utils/               # Utilidades y helpers
-│   ├── constants.dart
-│   ├── vector3_helper.dart
-│   └── pathfinding_helper.dart
-│
-└── main.dart            # Punto de entrada
+└── widgets/
+    └── ar_navigation_arrow.dart  # Flecha AR (nodo 3D + fallback 2D animado)
 ```
 
-## 🔧 Tecnologías Utilizadas
+## Dependencias principales
 
-### Dependencias Principales
-- `ar_flutter_plugin`: Framework AR para Flutter
-- `vector_math`: Cálculos matemáticos 3D
-- `hive`: Base de datos local NoSQL
-- `provider`: Gestión de estado
-- `image_picker`: Captura de fotos
-- `google_mlkit_image_labeling`: Reconocimiento de imágenes
-- `permission_handler`: Gestión de permisos
+| Paquete | Uso |
+|---------|-----|
+| `ar_flutter_plugin_plus` | ARCore / ARKit |
+| `http` | Llamadas al backend FastAPI |
+| `provider` | Estado global |
+| `shared_preferences` | Persistencia de IP y modo debug |
+| `flutter_spinkit` | Indicadores de carga |
+| `vector_math` | Matemáticas 3D para posicionamiento AR |
 
-### Algoritmos Implementados
-- **Pathfinding:** A* simplificado para cálculo de rutas
-- **Interpolación:** Catmull-Rom para rutas suaves
-- **Vector Math:** Operaciones 3D para posicionamiento AR
+## Personalización
 
-## 🎨 Personalización
-
-### Colores
-Edita `lib/utils/constants.dart`:
+**Cambiar colores universitarios** → `lib/config.dart`:
 ```dart
-static const Color primaryColor = Color(0xFF2196F3);  // Azul
-static const Color successColor = Color(0xFF4CAF50);  // Verde
-static const Color warningColor = Color(0xFFFFC107);  // Amarillo
+static const Color primaryColor = Color(0xFF003087); // Azul universitario
 ```
 
-### Configuración de Navegación
+**Cambiar resolución de localización** → `lib/screens/ar_navigation_screen.dart`:
 ```dart
-// Distancia para considerar "llegada"
-static const double destinationThreshold = 1.0;  // metros
-
-// Velocidad de caminata promedio
-static const double walkingSpeed = 1.4;  // m/s
-
-// Máximo de ubicaciones
-static const int maxLocations = 20;
+final processedBytes = await _resizeAndCompressJpeg(bytes, 1280, 720, 70);
+// Ajustar 1280×720 a la resolución usada al grabar los videos COLMAP
 ```
 
-### Datos de Ejemplo
-Modifica `lib/models/sample_data.dart` para cambiar las ubicaciones precargadas.
+**Cambiar IP del backend en tiempo de compilación** → `lib/config.dart`:
+```dart
+static const String defaultBaseUrl = 'http://192.168.1.10:8000';
+```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-### Problema: "Camera permission denied"
-**Solución:** Ve a Configuración > Apps > AR Home Navigator > Permisos y habilita la cámara.
+**La localización siempre falla**
+- Verifica que la IP del backend sea correcta en Configuración.
+- Apunta la cámara hacia un pasillo con textura visual, no hacia paredes lisas.
+- Confirma que la resolución de grabación de los videos COLMAP sea 1280×720.
 
-### Problema: "AR tracking no funciona"
-**Solución:**
-- Asegúrate de estar en un lugar bien iluminado
-- Mueve el dispositivo lentamente para detectar planos
-- El dispositivo debe soportar ARCore (Android) o ARKit (iOS)
+**AR no inicia / pantalla negra**
+- Instala o actualiza Google Play Services for AR desde la Play Store.
+- Usa un dispositivo físico; los emuladores no soportan ARCore.
+- Verifica que Impeller esté deshabilitado (ya configurado en `AndroidManifest.xml`).
 
-### Problema: "App se cierra al iniciar AR"
-**Solución:**
-- Verifica que estés usando un dispositivo físico (no emulador)
-- Actualiza Google Play Services for AR (Android)
-- Reinicia el dispositivo
+**"No se puede conectar al servidor"**
+- El smartphone y el servidor deben estar en la misma red WiFi.
+- Confirmar que el backend FastAPI esté corriendo: `uvicorn main:app --host 0.0.0.0 --port 8000`.
 
-### Problema: "No se guardan las ubicaciones"
-**Solución:**
-- Verifica permisos de almacenamiento
-- Revisa que no hayas alcanzado el límite de 20 ubicaciones
-- Limpia datos de la app y vuelve a intentar
-
-### Problema: Compilación falla en iOS
-**Solución:**
+**Compilación falla en iOS**
 ```bash
-cd ios
-pod deintegrate
-pod install
-cd ..
-flutter clean
-flutter pub get
-flutter run
+cd ios && pod deintegrate && pod install && cd ..
+flutter clean && flutter pub get && flutter run
 ```
 
-## 📊 Limitaciones Conocidas
+## Licencia
 
-1. **AR Simulado:** Esta versión usa AR simulado para demostración. Para producción se requiere integración completa con ARCore/ARKit.
-
-2. **VPS Simplificado:** El reconocimiento de imágenes es básico. Para producción se recomienda usar Google ARCore Cloud Anchors o similar.
-
-3. **Pathfinding Básico:** Usa línea directa sin considerar obstáculos. Para espacios complejos se requiere implementar A* completo con detección de obstáculos.
-
-4. **Escalabilidad:** Optimizado para espacios de 5-20 metros (casa típica). Para campus requiere optimizaciones de rendimiento.
-
-## 🚀 Próximos Pasos para Producción
-
-1. **Integración AR Real:**
-   - Implementar `arcore_flutter_plugin` para Android
-   - Implementar `arkit_plugin` para iOS
-   - Detección real de planos y tracking
-
-2. **VPS Avanzado:**
-   - Integrar Google ARCore Cloud Anchors
-   - Reconocimiento robusto de imágenes con ML Kit
-   - Sincronización en la nube
-
-3. **Networking:**
-   - Backend para compartir mapas entre usuarios
-   - Sincronización de ubicaciones
-   - Analytics y telemetría
-
-4. **Mejoras UX:**
-   - Tutorial interactivo en primera ejecución
-   - Modo offline con mapas precargados
-   - Accesibilidad (guía por voz, vibración)
-
-5. **Campus Universitario:**
-   - Escalabilidad para espacios grandes (>100m)
-   - Múltiples edificios y pisos
-   - Integración con horarios de clases
-   - Rutas accesibles (rampas, elevadores)
-
-## 📄 Licencia
-
-Este proyecto es un prototipo de demostración. Consulta el archivo LICENSE para más detalles.
-
-## 👥 Contribuciones
-
-Las contribuciones son bienvenidas. Por favor:
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📧 Contacto
-
-Para preguntas o soporte, contacta a través del repositorio de GitHub.
-
-## 🙏 Agradecimientos
-
-- Flutter Team por el excelente framework
-- Comunidad de ARCore y ARKit
-- Contribuidores de paquetes de código abierto
-
----
-
-**Nota:** Este es un prototipo de demostración. No está optimizado para uso en producción sin las mejoras mencionadas en "Próximos Pasos".
-
+Consulta el archivo LICENSE para más detalles.
